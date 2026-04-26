@@ -1,4 +1,4 @@
-# MAF-OOD v51 Reproducible Code Guide
+# MAF(Mahalanobis-Adaptive-Fusion)提案手法
 
 この README は、第三者がこのディレクトリから MAF-OOD v51 の主要実験を再現実装・再実行できるように、必要なファイル、環境、データ配置、実行順、出力確認をまとめたものです。
 
