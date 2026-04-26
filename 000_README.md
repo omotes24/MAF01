@@ -87,6 +87,12 @@ CPU-only 環境では long experiment は現実的ではありません。CPU-on
 
 default の data root は `~/WILD_DATA/splits` です。`--data-src` で変更できます。
 
+Dataset は次の Google Drive folder に置いてあります。
+
+- https://drive.google.com/drive/folders/1LCdZnAN6gWIv_Ds0bTWLipD6jjptLAgj?usp=sharing
+
+再現者はこの folder から dataset を取得し、下の layout になるように配置してください。例えば default path を使う場合、最終的に `~/WILD_DATA/splits/train/id/...`、`~/WILD_DATA/splits/val/id/...`、`~/WILD_DATA/splits/test/id/...`、`~/WILD_DATA/splits/test/ood/...` が存在する状態にします。
+
 期待する layout:
 
 ```text
