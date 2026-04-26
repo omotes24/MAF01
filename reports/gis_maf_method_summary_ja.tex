@@ -1,0 +1,186 @@
+\documentclass[a4paper,11pt]{ltjsarticle}
+\usepackage[margin=22mm]{geometry}
+\usepackage{amsmath,amssymb,booktabs}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+
+\title{GIS-MAF: ID幾何によるMAF混合係数 $\alpha$ の一意決定}
+\author{}
+\date{2026年4月25日}
+
+\begin{document}
+\maketitle
+
+\section{目的}
+
+MAFは confidence score $s_{\mathrm{conf}}(x)$ と consistency score
+$s_{\mathrm{cons}}(x)$ を
+\begin{equation}
+    s_{\alpha}(x)
+    =
+    s_{\mathrm{conf}}(x)^{\alpha}
+    s_{\mathrm{cons}}(x)^{1-\alpha},
+    \qquad
+    \alpha\in[0,1]
+\end{equation}
+で融合する。
+従来の $\alpha\in\{0.0,0.1,\ldots,1.0\}$ の sweep は、OOD test set に
+依存した oracle 選択になるため、提案手法では ID validation の幾何だけから
+$\alpha$ を一意に決定する。
+
+\section{ID leave-one-class-out 幾何}
+
+ID validation の各クラス $c$ を順に held-out し、
+$\mathcal{C}\setminus\{c\}$ を ID、$c$ を pseudo-OOD とみなす。
+各 fold で Mahalanobis 型の $s_{\mathrm{conf}}^{(-c)}$ と
+$s_{\mathrm{cons}}^{(-c)}$ を計算し、各サンプルを2次元 log-score 空間へ写す。
+\begin{equation}
+    r^{(-c)}(x)
+    =
+    \begin{pmatrix}
+        \log(s_{\mathrm{conf}}^{(-c)}(x)+\epsilon)\\
+        \log(s_{\mathrm{cons}}^{(-c)}(x)+\epsilon)
+    \end{pmatrix}.
+\end{equation}
+全 fold を集め、非 held-out サンプルを $R_+$、held-out サンプルを $R_-$ とする。
+それぞれの平均を $m_+,m_-$ とし、
+\begin{equation}
+    \delta=m_+-m_-,
+    \qquad
+    S=\operatorname{Cov}(R_+)+\operatorname{Cov}(R_-)+\lambda I_2
+\end{equation}
+を定義する。
+
+\section{Fisher方向と境界飽和}
+
+log-score 空間では
+\begin{equation}
+    \log s_{\alpha}(x)
+    \simeq
+    w_\alpha^\top r(x),
+    \qquad
+    w_\alpha =
+    \begin{pmatrix}
+        \alpha\\
+        1-\alpha
+    \end{pmatrix}.
+\end{equation}
+ID と pseudo-OOD を分離する Fisher 方向は
+\begin{equation}
+    a=S^{-1}\delta
+    =
+    \begin{pmatrix}
+        a_{\mathrm{conf}}\\
+        a_{\mathrm{cons}}
+    \end{pmatrix}
+\end{equation}
+で与えられる。
+$a_{\mathrm{conf}}>0$ かつ $a_{\mathrm{cons}}>0$ なら、MAF simplex 上の
+Fisher alpha は
+\begin{equation}
+    \alpha_F
+    =
+    \frac{a_{\mathrm{conf}}}
+         {a_{\mathrm{conf}}+a_{\mathrm{cons}}}
+\end{equation}
+となる。
+しかし DINOv2 では、$\alpha_F$ が正の cone 内にありながら
+$\alpha_F\simeq 1$ に張り付き、実際の oracle $\alpha$ は $0.5$ 付近であった。
+したがって、cone 外だけでなく、simplex 境界への飽和も抑える必要がある。
+
+\section{GIS alpha}
+
+まず cone 外の Fisher 方向を中立点に戻す。
+\begin{equation}
+    \alpha_{\mathrm{CIF}}
+    =
+    \begin{cases}
+    \alpha_F,
+    & a_{\mathrm{conf}}>0 \text{ and } a_{\mathrm{cons}}>0,\\
+    \frac{1}{2},
+    & \text{otherwise}.
+    \end{cases}
+\end{equation}
+次に、simplex interiorness を
+\begin{equation}
+    \gamma_F
+    =
+    \begin{cases}
+    4\alpha_F(1-\alpha_F),
+    & a_{\mathrm{conf}}>0 \text{ and } a_{\mathrm{cons}}>0,\\
+    0,
+    & \text{otherwise}
+    \end{cases}
+\end{equation}
+で測る。
+$\gamma_F$ は $\alpha_F=0.5$ で1、$\alpha_F=0$ または $1$ で0となる。
+最終的な geometry-interior shrunk alpha は
+\begin{equation}
+    \boxed{
+    \alpha_{\mathrm{GIS}}
+    =
+    \frac{1}{2}
+    +
+    \gamma_F
+    \left(
+        \alpha_{\mathrm{CIF}}-\frac{1}{2}
+    \right)}
+\end{equation}
+である。
+これは閾値を持たず、境界に近い Fisher 方向ほど連続的に $0.5$ 側へ戻す。
+例えば $\alpha_F=0.95$ なら、
+$\gamma_F=4(0.95)(0.05)=0.19$ なので、
+$\alpha_{\mathrm{GIS}}\simeq0.586$ となる。
+
+\section{最終スコア}
+
+提案スコアは
+\begin{equation}
+    s_{\mathrm{GIS\text{-}MAF}}(x)
+    =
+    s_{\mathrm{conf}}(x)^{\alpha_{\mathrm{GIS}}}
+    s_{\mathrm{cons}}(x)^{1-\alpha_{\mathrm{GIS}}}.
+\end{equation}
+OOD label、OOD validation set、$\alpha$ sweep は使わない。
+固定された ID validation split に対して $S^{-1}\delta$ は一意に決まるため、
+$\alpha_{\mathrm{GIS}}$ も一意に決まる。
+
+\section{診断量}
+
+実験では以下を併せて報告する。
+\begin{align}
+    \eta_{\mathrm{cone}}
+    &=
+    \mathbf{1}\{a_{\mathrm{conf}}>0,\ a_{\mathrm{cons}}>0\},\\
+    \eta_{\mathrm{sat}}
+    &=
+    |2\alpha_F-1|,\\
+    \gamma_F
+    &=
+    4\alpha_F(1-\alpha_F).
+\end{align}
+$\eta_{\mathrm{sat}}$ が大きく、$\gamma_F$ が小さい場合、ID Fisher が
+confidence または consistency の片側へ過度に寄っていることを示す。
+
+\section{実験結果}
+
+GPU1で4 backbone、3 seed に対して評価した。
+
+\begin{center}
+\begin{tabular}{lrrrrr}
+\toprule
+Backbone & raw/CIF $\alpha$ & GIS $\alpha$ & oracle $\alpha$ & AUROC & FPR95\\
+\midrule
+BioCLIP        & 0.859 & 0.674 & 0.720 & 0.8031 & 0.7324\\
+DINOv2         & 0.979 & 0.539 & 0.507 & 0.8928 & 0.5124\\
+ImageNet ViT   & 0.813 & 0.690 & 0.930 & 0.8446 & 0.6757\\
+OpenAI CLIP-B/16 & 0.881 & 0.660 & 0.753 & 0.8299 & 0.6843\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+DINOv2では、以前の Fisher/CIF alpha が $0.95$ 付近に張り付いていたが、
+GISにより $\alpha_{\mathrm{GIS}}=0.539$ となり、oracle $0.507$ に近づいた。
+同時に AUROC は $0.8868$ から $0.8928$、FPR95 は $0.5556$ から $0.5124$ へ改善した。
+
+\end{document}

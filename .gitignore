@@ -1,0 +1,56 @@
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Local logs
+*.log
+logs/
+
+# Model checkpoints, feature caches, and downloaded weights
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.npz
+*.npy
+*.pkl
+*.pickle
+
+# Generated experiment tables and figures
+*.csv
+*.tsv
+*.svg
+figs/
+rival_repro_comparison/
+rival_repro_comparison_corrected/
+rival_repro_comparison_fair_rerun/
+
+# Generated report build artifacts
+*.aux
+*.bbl
+*.blg
+*.dvi
+*.fls
+*.fdb_latexmk
+*.out
+*.synctex.gz
+*.toc
+reports/*.pdf
+
+# Local reproducibility manifests can be regenerated
+repro_manifest.json

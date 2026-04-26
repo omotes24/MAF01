@@ -1,0 +1,208 @@
+\documentclass[a4paper,11pt]{ltjsarticle}
+\usepackage[margin=21mm]{geometry}
+\usepackage{amsmath,amssymb,booktabs,array}
+\usepackage[hidelinks]{hyperref}
+
+\title{MAFix-$3/4$ とライバル手法の計算量比較}
+\author{}
+\date{2026年4月25日}
+
+\begin{document}
+\maketitle
+
+\section{設定}
+
+本比較では、backbone forward は全手法に共通するため除外し、抽出済み特徴
+$z(x)\in\mathbb{R}^{d}$ または logits から OOD score を計算する追加コストを比較する。
+今回の実験設定では ID クラス数を $C=5$、train sample 数を
+$N_{\mathrm{tr}}=45{,}941$、validation sample 数を
+$N_{\mathrm{val}}=10{,}000$ とする。
+backbone 特徴次元は $d=512$ または $768$、classifier hidden 次元は
+$h=256$ である。
+
+\section{MAFix-$3/4$}
+
+MAFix-$3/4$ は
+\begin{equation}
+    s_{\mathrm{MAFix}\text{-}3/4}(x)
+    =
+    s_{\mathrm{conf}}(x)^{3/4}
+    s_{\mathrm{cons}}(x)^{1/4}
+\end{equation}
+で定義する。
+ここで
+\begin{equation}
+    s_{\mathrm{conf}}(x)=\max_c p_c(x),
+    \qquad
+    s_{\mathrm{cons}}(x)=1-H_n(p(x)),
+\end{equation}
+\begin{equation}
+    p_c(x)
+    =
+    \frac{\exp(-d_c(x))}
+         {\sum_{k=1}^{C}\exp(-d_k(x))}
+\end{equation}
+であり、$d_c(x)$ は tied covariance を用いた Mahalanobis distance である。
+
+$\alpha=3/4$ を固定するため、OOD label を用いた sweep、ID LOO Fisher、
+adaptive alpha の計算は不要である。
+したがって推論時に必要なのは、各 class mean への Mahalanobis distance、
+softmax、entropy、固定指数の融合のみである。
+
+\section{計算量}
+
+表\ref{tab:complexity}に主要手法の追加計算量を示す。
+ここで $K$ は logit のクラス数、$q$ は ViM の residual subspace 次元、
+$Q$ は OODD queue size、$M$ は GEN の top-$M$ 数である。
+
+\begin{center}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{p{25mm}p{35mm}p{42mm}p{37mm}}
+\toprule
+Method & Setup cost & Per-sample score cost & 備考\\
+\midrule
+MSP / MaxLogit / Energy / Entropy
+& なし
+& $O(K)$
+& logits のみ。最も軽い。\\
+\midrule
+GEN
+& なし
+& $O(K\log K)$ または $O(K+M\log M)$
+& softmax 確率の上位 $M$ を使う。\\
+\midrule
+NCM Agreement
+& class prototype: $O(N_{\mathrm{tr}}d)$
+& $O(Cd+K)$
+& Euclidean prototype と classifier 予測の一致を見る。\\
+\midrule
+ReAct / ASH / SCALE
+& percentile: $O(N_{\mathrm{tr}}h)$
+& $O(dh+hK)$
+& hidden activation を加工して energy を計算。\\
+\midrule
+DICE / NCI
+& train hidden 統計: $O(N_{\mathrm{tr}}h)$
+& $O(dh+hK)$
+& final FC と hidden 特徴を利用。\\
+\midrule
+ViM
+& covariance eigendecomp:
+$O(N_{\mathrm{tr}}h^2+h^3)$
+& $O(hq+K)$
+& residual norm と energy の和。\\
+\midrule
+KNN
+& index/store: $O(N_{\mathrm{tr}}d)$
+& exact: $O(N_{\mathrm{tr}}d)$
+& query が重い。近似 index なら軽くできるが、精度・実装依存。\\
+\midrule
+OODD
+& feature select/store:
+$O(N_{\mathrm{tr}}h)$
+& $O((\alpha_{\mathrm{OODD}}N_{\mathrm{tr}}+Q)h)$
+& train queue との類似度計算が支配的。\\
+\midrule
+RMD
+& covariance/inverse:
+$O(N_{\mathrm{tr}}d^2+d^3)$
+& $O((C+1)d^2)$
+& class Mahalanobis と background Mahalanobis を計算。\\
+\midrule
+\textbf{MAFix-$3/4$}
+& class covariance/inverse:
+$O(N_{\mathrm{val}}d^2+d^3)$
+& \textbf{$O(Cd^2)$}
+& 固定 $\alpha$。LOO、Fisher、sweep は不要。\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}
+Table 1: OOD score 計算の支配的な追加計算量。
+\label{tab:complexity}
+\end{center}
+
+\section{今回設定での支配項}
+
+MAFix-$3/4$ の dense Mahalanobis 実装では、1 sample あたり
+\begin{equation}
+    C d^2
+\end{equation}
+が支配項となる。
+今回の $C=5$ では、
+\begin{align}
+    d=512 &: \quad 5d^2 \simeq 1.31\times 10^6,\\
+    d=768 &: \quad 5d^2 \simeq 2.95\times 10^6.
+\end{align}
+一方、exact KNN は
+\begin{equation}
+    N_{\mathrm{tr}}d
+\end{equation}
+であり、
+\begin{align}
+    d=512 &: \quad 2.35\times 10^7,\\
+    d=768 &: \quad 3.53\times 10^7.
+\end{align}
+したがって exact KNN は、MAFix-$3/4$ よりおよそ
+$12$--$18$倍重い。
+
+OODD は $\alpha_{\mathrm{OODD}}=0.5$、$Q=2048$、$h=256$ とすると、
+1 sample あたり
+\begin{equation}
+    (0.5N_{\mathrm{tr}}+Q)h
+    \simeq
+    6.4\times 10^6
+\end{equation}
+程度の inner product が必要であり、MAFix-$3/4$ より重い。
+
+RMD は $(C+1)d^2$ であり、MAFix-$3/4$ の $Cd^2$ と同程度だが、
+background Mahalanobis の分だけ MAFix-$3/4$ よりやや重い。
+
+\section{固定 $\alpha$ による削減}
+
+固定 $\alpha=3/4$ の重要な点は、MAF の score 計算そのものよりも、
+alpha selection cost を消せることである。
+OOD oracle sweep を使う場合、$G$ 個の候補 alpha に対して score を比較するため、
+単純実装では
+\begin{equation}
+    O(G n C d^2)
+\end{equation}
+が必要になる。
+今回の grid が $0.00,0.01,\ldots,1.00$ なら $G=101$ である。
+一方、MAFix-$3/4$ は
+\begin{equation}
+    O(n C d^2)
+\end{equation}
+のみで済む。
+
+ID LOO Fisher や GIS alpha も、validation set に対して leave-one-class-out
+Mahalanobis geometry を構築するため、追加で
+\begin{equation}
+    O(C^2 N_{\mathrm{val}}d^2)
+\end{equation}
+程度のコストを持つ。
+MAFix-$3/4$ はこの部分を完全に除去する。
+
+\section{結論}
+
+MAFix-$3/4$ は、logit-only baseline よりは重い。
+しかし、KNN、OODD よりは明確に軽く、RMD と同程度かやや軽い。
+さらに、oracle alpha sweep、ID LOO Fisher、GIS/adaptive alpha の計算を不要にするため、
+MAF 系の中では最も単純で計算量が小さい。
+
+したがって、計算量の観点では次のように位置づけられる。
+\begin{equation}
+    \text{logit-only}
+    \;<\;
+    \text{NCM / hidden-energy系}
+    \;<\;
+    \text{MAFix-}3/4 \approx \text{RMD}
+    \;<\;
+    \text{OODD}
+    \;<\;
+    \text{exact KNN}.
+\end{equation}
+
+\end{document}

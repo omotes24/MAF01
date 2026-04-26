@@ -1,0 +1,368 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  citecolor=blue
+}
+
+\setlength{\parskip}{0.6em}
+\setlength{\parindent}{0pt}
+
+\title{GPU2 Temperature Scaling Ablation Report for the Mahalanobis Adaptive Fusion Consistency Term}
+\author{Prepared from the completed GPU2 run on April 23, 2026}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This report summarizes the temperature scaling ablation that was executed on GPU2 to test whether the consistency term in Mahalanobis Adaptive Fusion becomes numerically degenerate when the temperature is fixed at $\tau = 1$. The motivating concern was that, in a high-dimensional feature space or in a feature space with very small variance, pairwise class-distance gaps can be amplified by the exponential inside the softmax, which could drive the class probability vector toward a one-hot distribution. If that happened systematically, the entropy would collapse toward zero and the consistency term would stop behaving as an informative uncertainty signal. To test that concern directly, the completed GPU2 run evaluated two temperature schemes, \texttt{raw} and \texttt{sqrt\_dim}, across three backbones and three random seeds by reusing the existing checkpoints and cached feature files rather than retraining the models.
+
+The main empirical finding is clear. The concern about entropy collapsing at $\tau = 1$ was not supported by this run. Across \texttt{imagenet\_vit}, \texttt{openai\_clip\_b16}, and \texttt{bioclip}, the \texttt{raw@1} setting did not produce near-zero entropy in a way that would invalidate the consistency term. Instead, the stronger effect came from \texttt{sqrt\_dim} scaling, which pushed the entropy extremely close to one, flattened the confidence distribution, and never produced the best result for any backbone. The best adaptive temperatures were \texttt{raw@0.25} for \texttt{imagenet\_vit}, \texttt{raw@1} for \texttt{openai\_clip\_b16}, and \texttt{raw@0.5} for \texttt{bioclip}. The best fixed-alpha temperatures were \texttt{raw@0.25}, \texttt{raw@0.5}, and \texttt{raw@0.5}, respectively.
+\end{abstract}
+
+\section{Purpose of This Ablation}
+
+The purpose of this study was to examine one very specific failure mode in the Mahalanobis Adaptive Fusion pipeline. The consistency term is derived from a softmax over negative class distances. If the effective temperature is too small relative to the geometry of the feature space, the softmax can become too sharp. If it is too large, the softmax can become too flat. Either extreme can damage the usefulness of the consistency signal. The concrete question was whether the commonly used fixed temperature $\tau = 1$ is already too sharp for some backbones, and whether scaling the temperature by $\sqrt{d}$, where $d$ is the feature dimension, provides a more stable normalization.
+
+This report therefore documents:
+\begin{enumerate}
+  \item what was changed and how the GPU2 experiment was implemented,
+  \item what was evaluated for each backbone and seed,
+  \item what temperatures actually worked best,
+  \item whether entropy collapse was observed at $\tau = 1$,
+  \item and what practical recommendation follows from the completed run.
+\end{enumerate}
+
+\section{What Was Executed on GPU2}
+
+The GPU2 run used the script \texttt{run\_temperature\_scaling\_ablation.py} together with the launcher \texttt{run\_temperature\_scaling\_ablation\_on\_hades.sh}. The run was configured in evaluation-only mode, which means that it did not retrain any backbone. Instead, it reused:
+\begin{itemize}
+  \item the trained checkpoint file \texttt{best.pt}, and
+  \item the cached feature bundle \texttt{analysis\_v3.npz}
+\end{itemize}
+for every available backbone and seed pair.
+
+That behavior follows directly from the evaluation pipeline. The function \texttt{evaluate\_backbone\_seed(..., eval\_only=True, force\_reextract=False)} first loads \texttt{best.pt} if it already exists, and only trains if the checkpoint is missing and \texttt{eval\_only} is false. Likewise, it only re-extracts features if \texttt{force\_reextract} is true or the cache is incomplete. In the completed GPU2 run, \texttt{eval\_only} was true, \texttt{force\_reextract} was false, and the run metadata recorded no skipped cases.
+
+\subsection{Backbones, Seeds, and Distance Mode}
+
+The completed run covered the following backbones:
+\begin{itemize}
+  \item \texttt{imagenet\_vit}
+  \item \texttt{openai\_clip\_b16}
+  \item \texttt{bioclip}
+\end{itemize}
+
+For every backbone, the experiment evaluated seeds \texttt{42}, \texttt{123}, and \texttt{456}. The distance mode was the tied-covariance Mahalanobis distance, recorded in the run metadata as \texttt{mah\_t}.
+
+\subsection{Temperature Schemes}
+
+The run tested five base temperatures:
+\[
+\tau \in \{0.25,\;0.5,\;1.0,\;2.0,\;4.0\}.
+\]
+
+It tested two schemes:
+\begin{itemize}
+  \item \textbf{\texttt{raw}}: the effective temperature is the base temperature itself,
+  \[
+  \tau_{\mathrm{eff}} = \tau.
+  \]
+  \item \textbf{\texttt{sqrt\_dim}}: the effective temperature is scaled by the square root of the feature dimension,
+  \[
+  \tau_{\mathrm{eff}} = \tau \sqrt{d}.
+  \]
+\end{itemize}
+
+The feature dimensions and resulting scale factors were:
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcccl}
+\toprule
+Backbone & Feature dimension $d$ & $\sqrt{d}$ & \texttt{raw@1} & \texttt{sqrt\_dim@1} \\
+\midrule
+\texttt{imagenet\_vit} & 768 & 27.7128 & 1.0000 & 27.7128 \\
+\texttt{openai\_clip\_b16} & 512 & 22.6274 & 1.0000 & 22.6274 \\
+\texttt{bioclip} & 512 & 22.6274 & 1.0000 & 22.6274 \\
+\bottomrule
+\end{tabular}
+\caption{Feature dimension and effective temperature scaling.}
+\end{table}
+
+\section{How Temperature Enters the Method}
+
+The temperature was applied inside the \texttt{MAF.components(...)} computation. For a sample $x$, let $d_c(x)$ be the class distance to class $c$. The implementation constructs class probabilities as
+\[
+p_c(x;\tau_{\mathrm{eff}}) =
+\frac{\exp\left(-d_c(x) / \tau_{\mathrm{eff}}\right)}
+{\sum_{j=1}^{C} \exp\left(-d_j(x) / \tau_{\mathrm{eff}}\right)}.
+\]
+
+From this probability vector, the implementation defines:
+\[
+\mathrm{confidence}(x) = \max_c p_c(x;\tau_{\mathrm{eff}}),
+\]
+\[
+H_{\mathrm{norm}}(x) =
+-\frac{1}{\log C}\sum_{c=1}^{C} p_c(x;\tau_{\mathrm{eff}})
+\log\left(p_c(x;\tau_{\mathrm{eff}}) + \varepsilon\right),
+\]
+\[
+\mathrm{consistency}(x) = 1 - H_{\mathrm{norm}}(x).
+\]
+
+Therefore, changing the temperature changes both the confidence term and the consistency term at the same time. The margin term used by the adaptive fusion rule is
+\[
+\mathrm{margin}(x) =
+\frac{d_{(2)}(x) - d_{(1)}(x)}
+{\overline{d}(x) + \varepsilon},
+\]
+where $d_{(1)}(x)$ and $d_{(2)}(x)$ are the smallest and second smallest class distances and $\overline{d}(x)$ is the mean class distance for that sample.
+
+The fused score is a geometric combination of confidence and consistency:
+\[
+S(x) =
+\mathrm{confidence}(x)^{\alpha(x)}
+\mathrm{consistency}(x)^{1-\alpha(x)}.
+\]
+
+Two variants were evaluated.
+
+\subsection{Adaptive Proposal}
+
+The adaptive proposal fits a backbone-specific baseline weight $\alpha_0$ on the in-distribution validation set. It first measures how well confidence and consistency each predict classification correctness by computing
+\[
+r_{\mathrm{conf}} = \mathrm{AUROC}(\mathrm{confidence}, \mathrm{correct}),
+\qquad
+r_{\mathrm{cons}} = \mathrm{AUROC}(\mathrm{consistency}, \mathrm{correct}).
+\]
+
+It then initializes
+\[
+\alpha_0 = \mathrm{clip}\left(
+\frac{r_{\mathrm{conf}}}{r_{\mathrm{conf}} + r_{\mathrm{cons}}},
+0.05,\;0.95
+\right).
+\]
+
+The sample-wise adaptive weight is then computed from the normalized margin:
+\[
+\alpha(x) =
+\mathrm{clip}\left(
+\sigma\left(
+\mathrm{logit}(\alpha_0) +
+\lambda
+\frac{\mathrm{margin}(x) - \mathrm{median}(\mathrm{margin})}
+{\mathrm{MAD}(\mathrm{margin}) + \varepsilon}
+\right),
+0.05,\;0.95
+\right),
+\]
+where $\sigma$ is the logistic sigmoid and \texttt{MAD} denotes the median absolute deviation.
+
+\subsection{Best Fixed Alpha Baseline}
+
+The fixed-alpha variant does not adapt $\alpha$ per sample. Instead, it sweeps
+\[
+\alpha \in \{0.00, 0.01, 0.02, \ldots, 1.00\}
+\]
+and records the best-performing fixed alpha for each temperature setting.
+
+\section{Evaluation Protocol}
+
+For each backbone and seed:
+\begin{enumerate}
+  \item the run loaded the existing checkpoint and cached feature bundle,
+  \item reconstructed the Mahalanobis statistics for the proposal space,
+  \item evaluated all temperature settings for both the adaptive proposal and the best fixed-alpha baseline,
+  \item recorded out-of-distribution detection metrics,
+  \item and then computed entropy diagnostics on the \texttt{val}, \texttt{test\_id}, and \texttt{test\_ood} splits.
+\end{enumerate}
+
+The reported detection metrics are:
+\begin{itemize}
+  \item Area Under the Receiver Operating Characteristic Curve (AUROC),
+  \item Area Under the Precision-Recall Curve with out-of-distribution as the positive class (AUPR-OUT),
+  \item False Positive Rate at 95\% True Positive Rate (FPR95),
+  \item and Area Under the Threshold Curve (AUTC).
+\end{itemize}
+
+In the implementation used here, larger AUROC and larger AUPR-OUT are better, while smaller FPR95 and smaller AUTC are better.
+
+\section{Primary Results}
+
+\subsection{Best Temperature for the Adaptive Proposal}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcccccc}
+\toprule
+Backbone & Best setting & AUROC & AUPR-OUT & FPR95 & AUTC & $\Delta$AUROC vs \texttt{raw@1} \\
+\midrule
+\texttt{imagenet\_vit} & \texttt{raw@0.25} & 0.8461 & 0.8139 & 0.6777 & 0.6135 & +0.0027 \\
+\texttt{openai\_clip\_b16} & \texttt{raw@1} & 0.8309 & 0.8060 & 0.6822 & 0.7898 & +0.0000 \\
+\texttt{bioclip} & \texttt{raw@0.5} & 0.8004 & 0.7698 & 0.7370 & 0.7703 & +0.0004 \\
+\bottomrule
+\end{tabular}
+\caption{Best temperature per backbone for the adaptive proposal. Means are computed over seeds 42, 123, and 456.}
+\end{table}
+
+Three observations follow immediately.
+
+First, the best adaptive setting was never a \texttt{sqrt\_dim} configuration. Every winning configuration came from the plain \texttt{raw} schedule.
+
+Second, the temperature preference was backbone-dependent. \texttt{imagenet\_vit} preferred a lower temperature than the default, \texttt{openai\_clip\_b16} preferred the default itself, and \texttt{bioclip} preferred a moderately smaller temperature.
+
+Third, the gains over \texttt{raw@1} were real but modest. This means the study supports per-backbone temperature tuning, but it does not suggest that the default temperature is catastrophically wrong.
+
+\subsection{Best Temperature for the Best Fixed-Alpha Baseline}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lccccccc}
+\toprule
+Backbone & Best setting & AUROC & AUPR-OUT & FPR95 & AUTC & Best fixed $\alpha$ & $\Delta$AUROC vs \texttt{raw@1} \\
+\midrule
+\texttt{imagenet\_vit} & \texttt{raw@0.25} & 0.8476 & 0.8153 & 0.6765 & 0.6266 & 0.0000 & +0.0006 \\
+\texttt{openai\_clip\_b16} & \texttt{raw@0.5} & 0.8309 & 0.8069 & 0.6845 & 0.7958 & 0.0567 & +0.0008 \\
+\texttt{bioclip} & \texttt{raw@0.5} & 0.8036 & 0.7734 & 0.7287 & 0.8309 & 0.0533 & +0.0005 \\
+\bottomrule
+\end{tabular}
+\caption{Best temperature per backbone for the best fixed-alpha baseline.}
+\end{table}
+
+The fixed-alpha results tell the same general story. Once again, every winning setting came from the \texttt{raw} schedule, not from \texttt{sqrt\_dim}. The best fixed-alpha solution preferred either \texttt{raw@0.25} or \texttt{raw@0.5}. In practical terms, this means that the small-temperature preference is not unique to the adaptive weighting mechanism. It also appears when the fusion weight is held fixed and optimized by brute-force sweep.
+
+\subsection{Direct Comparison to \texttt{raw@1} and \texttt{sqrt\_dim@1}}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{llcccc}
+\toprule
+Backbone & Setting & AUROC & AUPR-OUT & FPR95 & AUTC \\
+\midrule
+\texttt{imagenet\_vit} & \texttt{adaptive raw@0.25} & 0.8461 & 0.8139 & 0.6777 & 0.6135 \\
+\texttt{imagenet\_vit} & \texttt{adaptive raw@1} & 0.8435 & 0.8130 & 0.6753 & 0.7753 \\
+\texttt{imagenet\_vit} & \texttt{adaptive sqrt\_dim@1} & 0.8407 & 0.8103 & 0.6843 & 0.8007 \\
+\midrule
+\texttt{openai\_clip\_b16} & \texttt{adaptive raw@0.5} & 0.8302 & 0.8052 & 0.6841 & 0.7358 \\
+\texttt{openai\_clip\_b16} & \texttt{adaptive raw@1} & 0.8309 & 0.8060 & 0.6822 & 0.7898 \\
+\texttt{openai\_clip\_b16} & \texttt{adaptive sqrt\_dim@1} & 0.8251 & 0.7994 & 0.6931 & 0.8583 \\
+\midrule
+\texttt{bioclip} & \texttt{adaptive raw@0.5} & 0.8004 & 0.7698 & 0.7370 & 0.7703 \\
+\texttt{bioclip} & \texttt{adaptive raw@1} & 0.8000 & 0.7696 & 0.7365 & 0.8166 \\
+\texttt{bioclip} & \texttt{adaptive sqrt\_dim@1} & 0.7915 & 0.7605 & 0.7512 & 0.8528 \\
+\bottomrule
+\end{tabular}
+\caption{Selected adaptive-proposal comparisons showing the practical gap between the best raw setting, the default \texttt{raw@1}, and \texttt{sqrt\_dim@1}.}
+\end{table}
+
+This table captures the main conclusion in the simplest possible way. The default \texttt{raw@1} is competitive. In fact, it is exactly the best adaptive setting for \texttt{openai\_clip\_b16}. However, \texttt{sqrt\_dim@1} is consistently worse. The degradation is small for some cases and larger for others, but it is systematic across all three backbones.
+
+\section{Entropy Diagnostics and the Original Concern}
+
+The entropy diagnostics are the most important part of this ablation because they directly test the original hypothesis. If $\tau = 1$ were causing the consistency term to fail by making the class distribution nearly one-hot, we would expect:
+\begin{itemize}
+  \item low mean entropy,
+  \item a large fraction of samples with entropy extremely close to zero,
+  \item and unusually high confidence values.
+\end{itemize}
+
+That is not what happened. Instead, \texttt{raw@1} produced high normalized entropy, while \texttt{sqrt\_dim@1} pushed the entropy even closer to one and reduced the mean confidence to around the almost-uniform baseline.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{llccc}
+\toprule
+Backbone & Setting on validation split & Mean entropy & Fraction with entropy $\leq 10^{-2}$ & Mean confidence \\
+\midrule
+\texttt{imagenet\_vit} & \texttt{raw@0.25} & 0.3797 & 0.0570 & 0.7860 \\
+\texttt{imagenet\_vit} & \texttt{raw@1} & 0.9023 & 0.0000 & 0.4018 \\
+\texttt{imagenet\_vit} & \texttt{sqrt\_dim@1} & 0.9999 & 0.0000 & 0.2059 \\
+\midrule
+\texttt{openai\_clip\_b16} & \texttt{raw@0.5} & 0.7299 & 0.0000 & 0.5673 \\
+\texttt{openai\_clip\_b16} & \texttt{raw@1} & 0.9241 & 0.0000 & 0.3794 \\
+\texttt{openai\_clip\_b16} & \texttt{sqrt\_dim@1} & 0.9999 & 0.0000 & 0.2066 \\
+\midrule
+\texttt{bioclip} & \texttt{raw@0.5} & 0.7689 & 0.0000 & 0.5255 \\
+\texttt{bioclip} & \texttt{raw@1} & 0.9355 & 0.0000 & 0.3586 \\
+\texttt{bioclip} & \texttt{sqrt\_dim@1} & 0.9999 & 0.0000 & 0.2059 \\
+\bottomrule
+\end{tabular}
+\caption{Validation-set entropy diagnostics. The reported entropy is the normalized entropy derived from the distance-based softmax.}
+\end{table}
+
+These diagnostics contradict the original collapse hypothesis in its strongest form. At \texttt{raw@1}, the entropy is high, not low. The fraction of samples with entropy at or below $10^{-2}$ is zero for \texttt{openai\_clip\_b16} and \texttt{bioclip}, and also zero for \texttt{imagenet\_vit} at \texttt{raw@1}. The only visibly sharper setting is \texttt{imagenet\_vit raw@0.25}, where 5.70\% of validation samples fall below the $10^{-2}$ threshold. Even in that case, the configuration remains the best adaptive performer for that backbone, which means mild sharpening is not automatically harmful.
+
+The stronger numerical effect came from \texttt{sqrt\_dim@1}. Under that scaling, the entropy was approximately one for all three backbones, and the mean confidence dropped to about 0.206. That is exactly what we would expect from a distribution that is close to uniform over five classes. In other words, \texttt{sqrt\_dim} did not rescue an overly sharp distribution. It over-smoothed the distribution instead.
+
+\section{Interpretation}
+
+The GPU2 ablation supports the following interpretation.
+
+\subsection{The default temperature is not broken}
+
+The completed run does not provide evidence that \texttt{raw@1} makes the consistency term unusable. The entropy remains high, the near-zero entropy fractions are negligible, and the resulting out-of-distribution detection metrics are already strong. For \texttt{openai\_clip\_b16}, \texttt{raw@1} is the best adaptive setting in the entire tested grid.
+
+\subsection{Temperature still matters}
+
+Although the default temperature is not broken, it is not always optimal. Lower raw temperatures produced modest but repeatable improvements for \texttt{imagenet\_vit} and \texttt{bioclip}. That means a backbone-specific temperature sweep is justified as a practical refinement.
+
+\subsection{\texttt{sqrt\_dim} scaling is not supported by this run}
+
+The square-root-of-dimension scaling was explicitly tested and did not win for any backbone in either the adaptive proposal or the best fixed-alpha baseline. The entropy diagnostics explain why. Scaling by $\sqrt{d}$ moved the class probabilities too close to the uniform regime, which weakens both confidence contrast and consistency contrast.
+
+\subsection{The effect size is real but not dramatic}
+
+The gains from tuning temperature were measurable but not large. This matters for how the ablation should be written in the paper. The correct claim is not that the original temperature choice fails. The correct claim is that the default setting is serviceable, but a light backbone-specific temperature sweep can recover small improvements and confirms that \texttt{sqrt\_dim} scaling is not helpful in this benchmark.
+
+\section{Recommended Wording for the Paper}
+
+A defensible summary for the paper would be the following:
+
+\begin{quote}
+We performed an additional temperature-scaling ablation for the Mahalanobis Adaptive Fusion consistency term to test whether the default temperature $\tau = 1$ leads to entropy collapse in high-dimensional feature spaces. Across three backbones and three seeds, we found no evidence that $\tau = 1$ systematically drives the class distribution toward a one-hot regime. Instead, the normalized entropy remained high, while scaling the temperature by $\sqrt{d}$ over-smoothed the distribution and consistently underperformed the best raw-temperature setting. A small backbone-specific temperature sweep yielded modest gains for some backbones, but the default temperature remained competitive and was the best adaptive setting for the \texttt{openai\_clip\_b16} backbone.
+\end{quote}
+
+\section{Files Produced by the Completed Run}
+
+The remote output directory for the GPU2 run was:
+\url{/home/omote/260422_temperature_ablation/temperature_scaling_ablation/}.
+
+The local text exports were copied to:
+\url{/Users/k.omote/Downloads/260422_temperature_ablation_txt/}.
+
+The most important source files for this report were:
+\begin{itemize}
+  \item \texttt{best\_temperature\_adaptive.csv}
+  \item \texttt{best\_temperature\_best\_fixed\_alpha.csv}
+  \item \texttt{temperature\_ablation\_summary\_mean\_std.csv}
+  \item \texttt{temperature\_entropy\_diagnostics\_summary\_mean\_std.csv}
+  \item \texttt{run\_meta.json}
+\end{itemize}
+
+\section{Conclusion}
+
+The GPU2 temperature scaling ablation answered the original question. The concern that $\tau = 1$ causes the consistency term to collapse into an almost always-zero-entropy signal was not borne out by the completed run. Instead, the evidence indicates that the default temperature is stable, that modest per-backbone tuning can still help, and that scaling the temperature by $\sqrt{d}$ is not a good default for this benchmark. The most practical next step is therefore not to replace the default with a dimension-based rule, but to keep the raw schedule and report a small temperature sweep as an ablation.
+
+\end{document}

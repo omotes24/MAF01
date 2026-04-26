@@ -1,0 +1,236 @@
+% Required packages: amsmath, amssymb
+
+\section{Grid-Free Geometry-Interior MAF}
+\label{sec:geometry_calibrated_maf}
+
+MAF combines the confidence score $s_{\mathrm{conf}}(x)$ and the consistency
+score $s_{\mathrm{cons}}(x)$ by
+\begin{equation}
+    s_{\alpha}(x)
+    =
+    s_{\mathrm{conf}}(x)^{\alpha}
+    s_{\mathrm{cons}}(x)^{1-\alpha},
+    \qquad
+    \alpha \in [0,1].
+\end{equation}
+Previous experiments selected $\alpha$ by sweeping a finite grid such as
+$\{0.0,0.1,\ldots,1.0\}$.  This is undesirable because the selected value is
+not a property of the ID model alone; it depends on the OOD evaluation set used
+for model selection.  We therefore replace grid search by an ID-only geometric
+rule that returns a single deterministic value of $\alpha$.
+
+\subsection{ID-only Leave-one-class-out Geometry}
+
+Let $h(x)\in\mathbb{R}^{d}$ be the frozen backbone feature.  For each ID class
+$c$, we construct a leave-one-class-out fold.  The classes
+$\mathcal{C}\setminus\{c\}$ are treated as ID, while class $c$ is treated as a
+pseudo-OOD class.  On this fold, class means and a tied covariance are estimated
+only from $\mathcal{C}\setminus\{c\}$, and Mahalanobis distances produce
+fold-specific scores
+$s_{\mathrm{conf}}^{(-c)}(x)$ and $s_{\mathrm{cons}}^{(-c)}(x)$.
+Each sample is then mapped to the two-dimensional log-score geometry
+\begin{equation}
+    r^{(-c)}(x)
+    =
+    \begin{pmatrix}
+        \log(s_{\mathrm{conf}}^{(-c)}(x)+\epsilon) \\
+        \log(s_{\mathrm{cons}}^{(-c)}(x)+\epsilon)
+    \end{pmatrix}
+    \in \mathbb{R}^{2}.
+\end{equation}
+Collecting all folds gives an ID set $R_{+}$ and a pseudo-OOD set $R_{-}$:
+\begin{align}
+    R_{+}
+    &=
+    \bigcup_{c\in\mathcal{C}}
+    \{r^{(-c)}(x_i): y_i\neq c\},\\
+    R_{-}
+    &=
+    \bigcup_{c\in\mathcal{C}}
+    \{r^{(-c)}(x_i): y_i=c\}.
+\end{align}
+Let
+\begin{equation}
+    \delta = m_{+}-m_{-},
+    \qquad
+    S = \operatorname{Cov}(R_{+})+\operatorname{Cov}(R_{-})+\lambda I_{2},
+\end{equation}
+where $m_{+}$ and $m_{-}$ are the two empirical means and $\lambda>0$ is a small
+numerical ridge.
+
+\subsection{Geometry-Interior Shrunk Fisher Alpha}
+
+In log space,
+\begin{equation}
+    \log s_{\alpha}(x)
+    \simeq
+    w_{\alpha}^{\top} r(x),
+    \qquad
+    w_{\alpha}
+    =
+    \begin{pmatrix}
+        \alpha\\
+        1-\alpha
+    \end{pmatrix}.
+\end{equation}
+The unconstrained Fisher direction for separating $R_{+}$ from $R_{-}$ is
+\begin{equation}
+    a = S^{-1}\delta
+    =
+    \begin{pmatrix}
+        a_{\mathrm{conf}}\\
+        a_{\mathrm{cons}}
+    \end{pmatrix}.
+\end{equation}
+If both components of $a$ are positive, the Fisher direction lies inside the
+nonnegative MAF cone and can be normalized to the MAF simplex:
+\begin{equation}
+    \hat{\alpha}_{F}
+    =
+    \frac{a_{\mathrm{conf}}}
+         {a_{\mathrm{conf}}+a_{\mathrm{cons}}}.
+\end{equation}
+However, a valid cone direction is not always a reliable final mixture.  The
+DINOv2 case shows a different failure mode: the Fisher direction remains in the
+positive cone, but its normalized value saturates near the simplex boundary
+($\hat{\alpha}_{F}\simeq 1$), whereas the OOD-tuned oracle is near
+$\alpha=0.5$.  Thus the method should penalize both out-of-cone directions and
+near-boundary directions without introducing a new OOD-tuned threshold.
+
+We first define the conservative cone-corrected Fisher value
+\begin{equation}
+    \hat{\alpha}_{\mathrm{CIF}}
+    =
+    \begin{cases}
+    \displaystyle
+    \frac{a_{\mathrm{conf}}}
+         {a_{\mathrm{conf}}+a_{\mathrm{cons}}},
+    & \text{if } a_{\mathrm{conf}}>0
+      \text{ and } a_{\mathrm{cons}}>0,\\[2.2ex]
+    \displaystyle
+    \frac{1}{2},
+    & \text{otherwise.}
+    \end{cases}
+    \label{eq:cif_alpha}
+\end{equation}
+The fallback $\alpha=1/2$ is not tuned on OOD data.  It is the maximum-entropy
+point of the two-component MAF simplex and corresponds to the neutral product
+score
+\begin{equation}
+    s_{1/2}(x)
+    =
+    \sqrt{s_{\mathrm{conf}}(x)s_{\mathrm{cons}}(x)}.
+\end{equation}
+
+To handle cone-valid but boundary-saturated directions, we attach an
+interiorness weight to the Fisher displacement from the neutral point:
+\begin{equation}
+    \gamma_F
+    =
+    \begin{cases}
+    4\hat{\alpha}_{F}(1-\hat{\alpha}_{F}),
+    & \text{if } a_{\mathrm{conf}}>0
+      \text{ and } a_{\mathrm{cons}}>0,\\
+    0,
+    & \text{otherwise.}
+    \end{cases}
+\end{equation}
+This weight is one at the simplex center and approaches zero at either
+endpoint.  The proposed geometry-interior shrunk value is
+\begin{equation}
+    \hat{\alpha}_{\mathrm{GIS}}
+    =
+    \frac{1}{2}
+    +
+    \gamma_F
+    \left(\hat{\alpha}_{\mathrm{CIF}}-\frac{1}{2}\right).
+    \label{eq:gis_alpha}
+\end{equation}
+Equivalently, for a valid Fisher direction,
+$\gamma_F=1-|2\hat{\alpha}_{F}-1|^2$.  Hence no threshold is introduced:
+boundary saturation continuously reduces the amount of Fisher displacement.
+For example, $\hat{\alpha}_{F}=0.95$ gives
+$\gamma_F=4(0.95)(0.05)=0.19$ and
+$\hat{\alpha}_{\mathrm{GIS}}\simeq 0.586$.
+
+\paragraph{Final score.}
+Given $\hat{\alpha}_{\mathrm{GIS}}$, the proposed score is
+\begin{equation}
+    s_{\mathrm{GIS\text{-}MAF}}(x)
+    =
+    s_{\mathrm{conf}}(x)^{\hat{\alpha}_{\mathrm{GIS}}}
+    s_{\mathrm{cons}}(x)^{1-\hat{\alpha}_{\mathrm{GIS}}}.
+\end{equation}
+No OOD labels, OOD validation set, or grid search over $\alpha$ is used.
+
+\subsection{Uniqueness and Diagnostic Quantities}
+
+For fixed ID validation data and $\lambda>0$, $S$ is positive definite and
+$a=S^{-1}\delta$ is unique.  Equations~\eqref{eq:cif_alpha}
+and~\eqref{eq:gis_alpha} therefore return a single value of $\alpha$ for a
+given backbone and ID validation split.  This
+turns $\alpha$ from a swept hyperparameter into a deterministic geometric
+quantity.
+
+We also report three diagnostics:
+\begin{align}
+    \eta_{\mathrm{cone}}
+    &=
+    \mathbf{1}\{a_{\mathrm{conf}}>0,\;a_{\mathrm{cons}}>0\},\\
+    \eta_{\mathrm{sat}}
+    &=
+    |2\hat{\alpha}_{F}-1|,\\
+    \gamma_F
+    &=
+    4\hat{\alpha}_{F}(1-\hat{\alpha}_{F})
+    \quad \text{when } \eta_{\mathrm{cone}}=1.
+\end{align}
+$\eta_{\mathrm{cone}}=0$ indicates that the Fisher direction is outside the MAF
+simplex cone.  A large $\eta_{\mathrm{sat}}$ indicates that the ID Fisher rule
+nearly collapses to a single component.  A small $\gamma_F$ means that the
+final score will move only weakly away from the neutral product mixture.  These
+diagnostics are useful for identifying backbones such as DINOv2, where ID
+pseudo-OOD geometry and real OOD geometry may not be aligned.
+
+\subsection{Difference from Oracle Alpha}
+
+The purpose of $\hat{\alpha}_{\mathrm{GIS}}$ is not to reproduce the
+OOD-tuned oracle value
+\begin{equation}
+    \alpha_{\mathrm{oracle}}
+    =
+    \arg\max_{\alpha\in[0,1]}
+    \operatorname{AUROC}_{\mathrm{test\ OOD}}(\alpha).
+\end{equation}
+Instead, the purpose is to remove OOD-label tuning.  The oracle value is used
+only for analysis.  The proposed method answers a different question:
+given only ID validation geometry, which confidence--consistency mixture is
+geometrically justified?
+
+\subsection{Algorithm}
+
+\begin{enumerate}
+    \item Extract ID validation features $h(x_i)$ and labels $y_i$.
+    \item For each class $c$, build a leave-one-class-out Mahalanobis model on
+          $\mathcal{C}\setminus\{c\}$.
+    \item Map validation samples to
+          $r^{(-c)}(x)=(\log s_{\mathrm{conf}}^{(-c)}(x),
+          \log s_{\mathrm{cons}}^{(-c)}(x))^{\top}$.
+    \item Form $R_{+}$ from non-held-out samples and $R_{-}$ from held-out
+          samples.
+    \item Compute $\delta=m_{+}-m_{-}$ and
+          $S=\operatorname{Cov}(R_{+})+\operatorname{Cov}(R_{-})+\lambda I_2$.
+    \item Compute $a=S^{-1}\delta$.
+    \item If $a_{\mathrm{conf}}>0$ and $a_{\mathrm{cons}}>0$, set
+          $\hat{\alpha}_{\mathrm{CIF}}=
+          a_{\mathrm{conf}}/(a_{\mathrm{conf}}+a_{\mathrm{cons}})$.
+          Otherwise set $\hat{\alpha}_{\mathrm{CIF}}=1/2$.
+    \item Set
+          $\gamma_F=4\hat{\alpha}_{\mathrm{CIF}}(1-\hat{\alpha}_{\mathrm{CIF}})$
+          if the Fisher direction is cone-valid, and $\gamma_F=0$ otherwise.
+          Then compute
+          $\hat{\alpha}_{\mathrm{GIS}}
+          =1/2+\gamma_F(\hat{\alpha}_{\mathrm{CIF}}-1/2)$.
+    \item Score test samples by
+          $s_{\mathrm{GIS\text{-}MAF}}(x)$.
+\end{enumerate}
