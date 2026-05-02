@@ -1,0 +1,6 @@
+backbone,backbone_ms_per_image,msp_ms_per_image,mafix075_ms_per_image,mafix075_vs_msp_ratio,mafix075_overhead_ms_per_image,mafix075_overhead_percent
+dinov2_vitb14,4.506,4.658,4.907,1.054,0.250,5.36
+imagenet_vit,3.449,3.542,3.639,1.027,0.097,2.75
+openai_clip_b16,3.429,3.521,3.583,1.018,0.062,1.77
+bioclip,3.465,3.560,3.623,1.018,0.064,1.79
+mean,3.712,3.820,3.938,1.029,0.118,2.91

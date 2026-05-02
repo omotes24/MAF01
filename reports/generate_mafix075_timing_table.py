@@ -8,7 +8,7 @@ from pathlib import Path
 
 BACKBONE_LABELS = {
     "dinov2_vitb14": "DINOv2",
-    "imagenet_vit": "ImageNet ViT",
+    "imagenet_vit": "ImageNet-ViT",
     "openai_clip_b16": "OpenAI CLIP-B/16",
     "bioclip": "BioCLIP",
     "mean": "Mean",
@@ -51,24 +51,27 @@ def render_table(rows_in: list[dict[str, str]], caption: str, label: str) -> str
     body = "\n".join(rows)
     return rf"""\begin{{table}}[t]
 \centering
-\small
+\footnotesize
 \caption{{{caption}}}
 \label{{{label}}}
+\setlength{{\tabcolsep}}{{3.5pt}}
+\resizebox{{\linewidth}}{{!}}{{%
 \begin{{tabular}}{{lrrrrrr}}
 \toprule
-Backbone & Forward & MSP & MAFix-$3/4$ & Ratio & Overhead & Overhead \\
+Backbone & Forward & MSP & MAF & Ratio & Overhead & Overhead \\
  & ms/img & ms/img & ms/img & vs. MSP & ms/img & \% \\
 \midrule
 {body}
 \bottomrule
-\end{{tabular}}
+\end{{tabular}}%
+}}
 \end{{table}}
 """
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Generate a booktabs LaTeX table for MSP vs MAFix-3/4 end-to-end timing."
+        description="Generate a booktabs LaTeX table for MSP vs fixed-alpha MAF end-to-end timing."
     )
     parser.add_argument(
         "--input",
@@ -85,12 +88,11 @@ def main() -> None:
     parser.add_argument(
         "--caption",
         default=(
-            "End-to-end runtime comparison between MSP and MAFix-$3/4$. "
-            "Data loading is excluded; each measurement includes backbone forward and score computation "
-            "on GPU1 with batch size 64."
+            "backbone forwardを含むend-to-end推論時間の実測値．"
+            "data loadingは除外し，GPU1，batch size 64で計測した．"
         ),
     )
-    parser.add_argument("--label", default="tab:mafix075_timing")
+    parser.add_argument("--label", default="tab:runtime")
     args = parser.parse_args()
 
     order = ["dinov2_vitb14", "imagenet_vit", "openai_clip_b16", "bioclip", "mean"]

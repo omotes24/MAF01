@@ -1,18 +1,21 @@
 \begin{table}[t]
 \centering
-\small
-\caption{End-to-end runtime comparison between MSP and MAFix-$3/4$. Data loading is excluded; each measurement includes backbone forward and score computation on GPU1 with batch size 64.}
-\label{tab:mafix075_timing}
+\footnotesize
+\caption{backbone forwardを含むend-to-end推論時間の実測値．data loadingは除外し，GPU1，batch size 64で計測した．}
+\label{tab:runtime}
+\setlength{\tabcolsep}{3.5pt}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lrrrrrr}
 \toprule
-Backbone & Forward & MSP & MAFix-$3/4$ & Ratio & Overhead & Overhead \\
+Backbone & Forward & MSP & MAF & Ratio & Overhead & Overhead \\
  & ms/img & ms/img & ms/img & vs. MSP & ms/img & \% \\
 \midrule
     DINOv2 & 4.506 & 4.658 & 4.907 & 1.054$\times$ & 0.250 & 5.36\% \\
-    ImageNet ViT & 3.449 & 3.542 & 3.639 & 1.027$\times$ & 0.097 & 2.75\% \\
+    ImageNet-ViT & 3.449 & 3.542 & 3.639 & 1.027$\times$ & 0.097 & 2.75\% \\
     OpenAI CLIP-B/16 & 3.429 & 3.521 & 3.583 & 1.018$\times$ & 0.062 & 1.77\% \\
     BioCLIP & 3.465 & 3.560 & 3.623 & 1.018$\times$ & 0.064 & 1.79\% \\
     \textbf{Mean} & \textbf{3.712} & \textbf{3.820} & \textbf{3.938} & \textbf{1.029$\times$} & \textbf{0.118} & \textbf{2.91\%} \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
