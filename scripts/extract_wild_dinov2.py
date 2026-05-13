@@ -18,6 +18,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", required=True, help="Output analysis_v3.npz path.")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--dinov2-ref", default=None, help="Git ref for facebookresearch/dinov2. Defaults to the pinned commit in maf01.features.")
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--no-head", action="store_true", help="Do not train a simple logit head.")
@@ -40,7 +41,7 @@ def main() -> None:
         )
         for name, ds in datasets.items()
     }
-    model = load_dinov2_vitb14(device=args.device)
+    model = load_dinov2_vitb14(device=args.device, ref=args.dinov2_ref) if args.dinov2_ref else load_dinov2_vitb14(device=args.device)
     splits = {}
     for name, loader in loaders.items():
         print(f"[extract] {name}: {len(loader.dataset)} images")

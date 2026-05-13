@@ -100,7 +100,7 @@ def evaluate_seed(
         alpha=args.alpha,
         tau=args.tau,
         source_file=source_file,
-        note="main fixed setting; no test-OOD alpha tuning",
+        note="fixed after exploratory ablation; no test-OOD alpha tuning in this command",
     )
 
     if args.main_only:

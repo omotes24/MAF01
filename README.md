@@ -47,7 +47,11 @@ Higher scores mean more ID-like. The reproducible main setting is:
 
 ## Dataset Layout
 
-The WILD_DATA split used in the paper is expected outside the repository:
+The WILD_DATA split used in the paper is expected outside the repository and is available here:
+
+```text
+https://drive.google.com/drive/folders/1LCdZnAN6gWIv_Ds0bTWLipD6jjptLAgj?usp=sharing
+```
 
 ```text
 WILD_DATA/splits/
@@ -58,6 +62,8 @@ WILD_DATA/splits/
 ```
 
 `val/ood` is not used by the main MAF setting.
+
+See [docs/dataset.md](docs/dataset.md) for dataset notes.
 
 ## Install
 
@@ -72,6 +78,16 @@ pip install -e .
 ```
 
 CPU-only installation can run unit tests and cached-feature scoring, but full image feature extraction is intended for a GPU.
+
+For a pinned submission environment, see [environment.yml](environment.yml), [requirements-lock.txt](requirements-lock.txt), and [docs/environment.md](docs/environment.md).
+
+The DINOv2 feature extractor is pinned to Meta's official repository:
+
+```text
+repository: facebookresearch/dinov2
+model: dinov2_vitb14
+git ref: 7b187bd4df8efce2cbcbbb67bd01532c19bf4c9c
+```
 
 ## Reproduce From Cached Features
 
@@ -137,6 +153,8 @@ On WILD_DATA with DINOv2-ViT-B/14 and three seeds, the fixed MAF setting above g
 
 The repository also includes ablation hooks for `s_conf only`, `s_cons only`, arithmetic fusion, class-wise covariance, empirical covariance, Euclidean fusion, Mahalanobis minimum distance, RMD, KNN, MSP, Entropy, Energy, and MaxLogit.
 
+Baseline equations and implementation differences are documented in [docs/baselines.md](docs/baselines.md). Exploratory choices and oracle/analysis-only settings are documented in [docs/model_selection.md](docs/model_selection.md).
+
 ## Repository Structure
 
 ```text
@@ -154,6 +172,10 @@ configs/
   wild_data_dinov2.yaml
 docs/
   method.md
+  dataset.md
+  environment.md
+  baselines.md
+  model_selection.md
 tests/
   smoke_test.py
 ```

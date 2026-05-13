@@ -8,6 +8,10 @@ import numpy as np
 
 from .io import SplitBundle
 
+DINOv2_REPO = "facebookresearch/dinov2"
+DINOv2_COMMIT = "7b187bd4df8efce2cbcbbb67bd01532c19bf4c9c"
+DINOv2_MODEL = "dinov2_vitb14"
+
 
 def set_seed(seed: int) -> None:
     random.seed(seed)
@@ -21,10 +25,10 @@ def set_seed(seed: int) -> None:
         pass
 
 
-def load_dinov2_vitb14(device: str = "cuda"):
+def load_dinov2_vitb14(device: str = "cuda", ref: str = DINOv2_COMMIT):
     import torch
 
-    model = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14")
+    model = torch.hub.load(f"{DINOv2_REPO}:{ref}", DINOv2_MODEL)
     model.eval()
     model.to(device)
     return model
