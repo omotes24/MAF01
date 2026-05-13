@@ -36,6 +36,7 @@ logs/
 *.tsv
 *.svg
 figs/
+results/
 rival_repro_comparison/
 rival_repro_comparison_corrected/
 rival_repro_comparison_fair_rerun/

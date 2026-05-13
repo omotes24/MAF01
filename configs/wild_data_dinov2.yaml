@@ -1,0 +1,29 @@
+dataset:
+  root: /home/omote/WILD_DATA/splits
+  id_classes: [buffalo, cheetah, elephant, giraffe, hippo]
+  ood_classes: [impala, leopard, lion, rhino, wildebeest]
+  use_val_ood: false
+
+backbone:
+  name: dinov2_vitb14
+  feature_dim: 768
+  input_size: 224
+  resize: 256
+  crop: center
+  normalization: imagenet
+  frozen: true
+  fine_tuning: false
+
+maf:
+  feature_space: raw
+  covariance: tied
+  estimator: ledoit_wolf
+  alpha: 0.50
+  tau: 1.0
+  epsilon: 1.0e-12
+  alpha_source: fixed_no_ood_tuning
+
+evaluation:
+  id_split: test/id
+  ood_split: test/ood
+  metrics: [AUROC, AUPR-IN, AUPR-OUT, FPR95, AUTC]
