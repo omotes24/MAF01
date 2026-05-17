@@ -1,7 +1,10 @@
-# MAF:マハラノビス距離を考慮した分布外検知手法の提案
-# 慶應義塾大学3年　表 紘太朗 (Keio University B3 Kotaro Omote)
+# MAF: マハラノビス距離を考慮した分布外検知手法の提案
+
+慶應義塾大学3年　表 紘太朗 (Keio University B3, Kotaro Omote)
 
 Reproducible implementation for **Mahalanobis Affinity Fusion (MAF)**, a feature-space Near-OOD detector for wildlife images.
+
+**Report PDF:** [MAF: マハラノビス距離を考慮した野生動物画像の分布外検知手法の提案](docs/maf_report.pdf)
 
 This repository is intentionally small. It keeps only the implementation needed to reproduce the paper experiments and removes notebooks, report build artifacts, server-specific wrapper scripts, and temporary ablation code.
 
