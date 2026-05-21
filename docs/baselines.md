@@ -8,12 +8,12 @@ The goal is not to claim that these scripts reproduce every training detail of e
 
 - \(x\): input image.
 - \(h=f(x)\in\mathbb{R}^{d}\): frozen-backbone feature.
-- \(z=g(h)\in\mathbb{R}^{K}\): logits from the local frozen-feature MLP head.
+- \(z=g(h)\in\mathbb{R}^{K}\): logits from the local frozen-feature linear head.
 - \(p=\operatorname{softmax}(z)\).
 - \(K\): number of ID classes.
 - Higher \(s(x)\) means more ID-like.
 
-In the DINOv2 setting, \(h\) is the raw CLS feature from `dinov2_vitb14`. Logit-based baselines use a small MLP head trained on `train/id` frozen features and selected with `val/id`. No OOD images are used for training or hyperparameter selection in the default setting.
+In the DINOv2 setting, \(h\) is the raw CLS feature from `dinov2_vitb14`. Logit-based baselines use a one-layer `Linear(d->K)` head trained on `train/id` frozen features and selected with `val/id`. For WILD_DATA with DINOv2-ViT-B/14, this is `Linear(768->5)`. No OOD images are used for training or hyperparameter selection in the default setting.
 
 ## Logit-Based Baselines
 
@@ -35,7 +35,7 @@ softmax(logits, axis=1).max(axis=1)
 
 Input: `id_logits`, `ood_logits`.
 
-Difference from source paper: the scoring formula is identical. The classifier is not the original paper's classifier; it is the local DINOv2 frozen-feature MLP head.
+Difference from source paper: the scoring formula is identical. The classifier is not the original paper's classifier; it is the local DINOv2 frozen-feature `Linear(d->K)` head.
 
 ### Entropy
 
@@ -101,7 +101,7 @@ logits.max(axis=1)
 
 Input: `id_logits`, `ood_logits`.
 
-Difference from source paper: the score formula is identical, but logits come from the local frozen-feature MLP head rather than the original large-scale trained models.
+Difference from source paper: the score formula is identical, but logits come from the local frozen-feature `Linear(d->K)` head rather than the original large-scale trained models.
 
 ## Feature-Based Baselines
 

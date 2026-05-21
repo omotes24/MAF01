@@ -1,10 +1,10 @@
-# MAF: マハラノビス距離を考慮した分布外検知手法の提案
+# MAF: 特徴空間のMahalanobis幾何に基づく野生動物画像のUltra-Near-OoD検知
 
 # 慶應義塾大学3年　表 紘太朗 (Keio University B3, Kotaro Omote)
 
-Reproducible implementation for **Mahalanobis Affinity Fusion (MAF)**, a feature-space Near-OOD detector for wildlife images.
+Reproducible implementation for **Mahalanobis Affinity Fusion (MAF)**, a feature-space Ultra-Near-OoD detector for wildlife images.
 
-**Report PDF:** [MAF: マハラノビス距離を考慮した野生動物画像の分布外検知手法の提案](docs/maf_report.pdf)
+**Report PDF:** [MAF: 特徴空間のMahalanobis幾何に基づく野生動物画像のUltra-Near-OoD検知](docs/main.pdf)
 
 This repository is intentionally small. It keeps only the implementation needed to reproduce the paper experiments and removes notebooks, report build artifacts, server-specific wrapper scripts, and temporary ablation code.
 
@@ -125,6 +125,10 @@ Optional logit baselines additionally use:
 id_logits, ood_logits
 ```
 
+When logits are created from cached raw features, this repository uses the paper
+setting: a one-layer frozen-feature classifier `Linear(d->K)` with no hidden
+layer. For DINOv2-ViT-B/14 on WILD_DATA this is `Linear(768->5)`.
+
 Outputs:
 
 ```text
@@ -168,7 +172,7 @@ src/maf01/
   baselines.py    # MSP, Entropy, Energy, MaxLogit, KNN, RMD, Mah-MinDist
   io.py           # cached feature NPZ loading/saving
   data.py         # WILD_DATA image datasets and transforms
-  features.py     # DINOv2 feature extraction and a simple logit head
+  features.py     # DINOv2 feature extraction and a Linear(d->K) logit head
 scripts/
   extract_wild_dinov2.py
   run_cached_features.py

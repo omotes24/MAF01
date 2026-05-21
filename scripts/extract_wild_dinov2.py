@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from maf01.data import build_wild_datasets, dinov2_eval_transform
-from maf01.features import attach_logits, extract_split, load_dinov2_vitb14, set_seed, train_mlp_head
+from maf01.features import attach_logits, extract_split, load_dinov2_vitb14, set_seed, train_linear_head
 from maf01.io import FeaturePayload, save_feature_payload
 
 
@@ -48,8 +48,8 @@ def main() -> None:
         splits[name] = extract_split(model, tqdm(loader, desc=name), device=args.device)
 
     if not args.no_head:
-        print("[head] training a frozen-feature MLP head for logit baselines")
-        head = train_mlp_head(
+        print("[head] training a frozen-feature Linear(d->K) head for logit baselines")
+        head = train_linear_head(
             splits["train"],
             val=splits["val"],
             seed=args.seed,

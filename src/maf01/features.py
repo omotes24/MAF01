@@ -61,7 +61,7 @@ def extract_split(model, loader, device: str) -> SplitBundle:
     return SplitBundle(features=np.concatenate(features, axis=0), labels=labels_arr)
 
 
-def train_mlp_head(
+def train_linear_head(
     train: SplitBundle,
     val: Optional[SplitBundle] = None,
     num_classes: Optional[int] = None,
@@ -72,6 +72,12 @@ def train_mlp_head(
     weight_decay: float = 1.0e-4,
     device: str = "cuda",
 ):
+    """Train the frozen-feature logit head used for MSP/Energy baselines.
+
+    The paper setting uses a single affine classifier, Linear(d -> K), with no
+    hidden layer. For DINOv2-ViT-B/14 on WILD_DATA this is Linear(768 -> 5).
+    """
+
     import torch
     import torch.nn as nn
     import torch.nn.functional as F
@@ -85,7 +91,7 @@ def train_mlp_head(
     dim = int(x_train.shape[1])
     if num_classes is None:
         num_classes = int(y_train.max().item()) + 1
-    model = nn.Sequential(nn.Linear(dim, 256), nn.ReLU(), nn.Linear(256, int(num_classes))).to(device)
+    model = nn.Linear(dim, int(num_classes)).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     ds = TensorDataset(x_train, y_train)
     gen = torch.Generator()
