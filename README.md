@@ -165,6 +165,20 @@ The repository also includes ablation hooks for `s_conf only`, `s_cons only`, ar
 
 Baseline equations and implementation differences are documented in [docs/baselines.md](docs/baselines.md). Exploratory choices and oracle/analysis-only settings are documented in [docs/model_selection.md](docs/model_selection.md).
 
+## Result Figures
+
+Selected result figures are included under [docs/figures](docs/figures). These are intended for quickly checking the reported behavior without opening the full PDF.
+
+| Main comparison | Score distribution |
+| --- | --- |
+| <img src="docs/figures/main_auroc_fpr95_scatter.png" width="420"> | <img src="docs/figures/score_hist_maf_energy_rmd.png" width="420"> |
+
+| ROC / PR curves | Feature geometry |
+| --- | --- |
+| <img src="docs/figures/roc_curves.png" width="420"> | <img src="docs/figures/tsne_dinov2_seed42.png" width="420"> |
+
+Additional backbone, ablation, covariance, and species-level figures are listed in [docs/figures/README.md](docs/figures/README.md).
+
 ## Repository Structure
 
 ```text
@@ -186,6 +200,7 @@ docs/
   environment.md
   baselines.md
   model_selection.md
+  figures/       # selected result figures and analysis plots
 tests/
   smoke_test.py
 ```
