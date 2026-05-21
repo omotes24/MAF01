@@ -2,6 +2,8 @@
 
 # 慶應義塾大学3年　表 紘太朗 (Keio University B3, Kotaro Omote)
 
+研究会では各自をログインネームで呼ぶ＆書く文化があります。悪しからずご了承ください。
+
 Reproducible implementation for **Mahalanobis Affinity Fusion (MAF)**, a feature-space Ultra-Near-OoD detector for wildlife images.
 
 **Report PDF:** [MAF: 特徴空間のMahalanobis幾何に基づく野生動物画像のUltra-Near-OoD検知](docs/main.pdf)
