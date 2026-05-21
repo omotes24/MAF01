@@ -172,6 +172,58 @@ s_{\mathrm{MahMin}}(x)=-\min_c d_c(x).
 
 Difference from formulations using \(-\min_c q_c(x)\): square root is monotonic, so ranking-based metrics such as AUROC are unchanged relative to the quadratic score, but raw score scale differs.
 
+### Mahalanobis++
+
+Source: Maximilian Mueller and Matthias Hein, "Mahalanobis++: Improving OOD Detection via Feature Normalization", ICML 2025.
+
+This repository implements Mahalanobis++ as a separate baseline, not as MAF with L2 normalization. It follows the public reference implementation:
+
+\[
+\bar{h}=\frac{h}{\lVert h\rVert_2+\epsilon}.
+\]
+
+Class means are estimated from `train/id` normalized features:
+
+\[
+\mu_c=\frac{1}{N_c}\sum_{i:y_i=c}\bar{h}_i.
+\]
+
+The shared covariance is estimated with `sklearn.covariance.EmpiricalCovariance(assume_centered=True)` on class-centered train features:
+
+\[
+\Sigma
+=
+\operatorname{Cov}\left(
+\left\{\bar{h}_i-\mu_{y_i}\right\}_{i=1}^{N}
+\right).
+\]
+
+The score is the negative nearest-class quadratic Mahalanobis distance:
+
+\[
+s_{\mathrm{Mahalanobis++}}(x)
+=
+-\min_c
+(\bar{h}(x)-\mu_c)^\top
+\Sigma^{-1}
+(\bar{h}(x)-\mu_c).
+\]
+
+Implementation:
+
+```python
+feature_train = l2_normalize(feature_train)
+feature_query = l2_normalize(feature_query)
+means = class_means(feature_train, train_labels)
+centered = feature_train - means[train_labels]
+precision = EmpiricalCovariance(assume_centered=True).fit(centered).precision_
+score = -min_quadratic_mahalanobis(feature_query, means, precision)
+```
+
+Input requirement: exact Mahalanobis++ requires `tr_features` and `tr_labels` in `analysis_v3.npz`. If the cached artifact has no train split, this row is not emitted by `scripts/run_cached_features.py`.
+
+Difference from the source paper: the scoring formula and covariance estimator match the reference code path, but the backbone/features are the WILD_DATA cached features used in this repository, not the ImageNet-scale model zoo evaluated in the original paper.
+
 ### RMD
 
 Source: Ren et al., "A Simple Fix to Mahalanobis Distance for Improving Near-OOD Detection", UDL 2021 / arXiv 2021.

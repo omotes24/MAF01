@@ -12,8 +12,10 @@ import pandas as pd
 from maf01.baselines import (
     energy_score,
     entropy_score,
+    fit_mahalanobis_pp,
     fit_rmd,
     knn_score,
+    mahalanobis_pp_score,
     maxlogit_score,
     msp_score,
     rmd_score,
@@ -379,6 +381,26 @@ def maybe_add_feature_baselines(
         source_file=source_file,
         note="uses train split if available, otherwise val/id",
     )
+
+    if payload.train is not None and payload.train.labels is not None:
+        mah_pp = fit_mahalanobis_pp(payload.train.features, payload.train.labels)
+        add_result(
+            rows,
+            backbone,
+            seed,
+            "Mahalanobis++",
+            payload,
+            mahalanobis_pp_score(payload.test_id.features, mah_pp),
+            mahalanobis_pp_score(payload.test_ood.features, mah_pp),
+            distance="mah_t_quadratic",
+            covariance="shared_empirical_centered",
+            estimator="empirical",
+            feature_space="l2",
+            alpha=np.nan,
+            tau=np.nan,
+            source_file=source_file,
+            note="official-style: train/id L2 features, class means, centered shared EmpiricalCovariance, -min quadratic distance",
+        )
 
 
 if __name__ == "__main__":

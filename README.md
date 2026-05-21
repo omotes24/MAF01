@@ -161,7 +161,7 @@ On WILD_DATA with DINOv2-ViT-B/14 and three seeds, the fixed MAF setting above g
 | --- | ---: | ---: | ---: | ---: | ---: |
 | MAF, tied LW, alpha=0.50 | 0.8928 | 0.9002 | 0.8793 | 0.5128 | 0.7734 |
 
-The repository also includes ablation hooks for `s_conf only`, `s_cons only`, arithmetic fusion, class-wise covariance, empirical covariance, Euclidean fusion, Mahalanobis minimum distance, RMD, KNN, MSP, Entropy, Energy, and MaxLogit.
+The repository also includes ablation hooks for `s_conf only`, `s_cons only`, arithmetic fusion, class-wise covariance, empirical covariance, Euclidean fusion, Mahalanobis minimum distance, Mahalanobis++, RMD, KNN, MSP, Entropy, Energy, and MaxLogit.
 
 Baseline equations and implementation differences are documented in [docs/baselines.md](docs/baselines.md). Exploratory choices and oracle/analysis-only settings are documented in [docs/model_selection.md](docs/model_selection.md).
 

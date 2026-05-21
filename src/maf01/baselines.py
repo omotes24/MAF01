@@ -5,7 +5,7 @@ from typing import Optional
 
 import numpy as np
 from scipy.special import logsumexp, softmax
-from sklearn.covariance import LedoitWolf
+from sklearn.covariance import EmpiricalCovariance, LedoitWolf
 from sklearn.neighbors import NearestNeighbors
 
 from .constants import EPS
@@ -80,6 +80,61 @@ def rmd_score(query_features: np.ndarray, stats: RmdStats) -> np.ndarray:
     global_diff = query - stats.global_mean
     global_dist = np.sum((global_diff @ stats.global_inv) * global_diff, axis=1)
     return -class_dist.min(axis=1) + global_dist
+
+
+@dataclass
+class MahalanobisPPStats:
+    """Statistics for the Mahalanobis++ baseline.
+
+    This follows the public Mahalanobis++ reference implementation: L2-normalize
+    pre-logit features, estimate class means on ID train features, fit a shared
+    empirical covariance on class-centered train features, and score by the
+    negative nearest-class quadratic Mahalanobis distance.
+    """
+
+    class_means: np.ndarray
+    precision: np.ndarray
+    class_labels: np.ndarray
+
+
+def fit_mahalanobis_pp(train_features: np.ndarray, train_labels: np.ndarray) -> MahalanobisPPStats:
+    train_features = l2_normalize(np.asarray(train_features, dtype=np.float64))
+    train_labels = np.asarray(train_labels)
+    if train_features.ndim != 2:
+        raise ValueError("train_features must be a 2D array.")
+    if train_labels.shape[0] != train_features.shape[0]:
+        raise ValueError("train_labels must have the same length as train_features.")
+
+    class_labels = np.array(sorted(np.unique(train_labels).tolist()))
+    means = []
+    centered = []
+    for label in class_labels:
+        class_features = train_features[train_labels == label]
+        if class_features.shape[0] == 0:
+            raise ValueError(f"No train features found for class {label!r}.")
+        mean = class_features.mean(axis=0)
+        means.append(mean)
+        centered.append(class_features - mean)
+
+    centered_features = np.vstack(centered).astype(np.float64, copy=False)
+    covariance = EmpiricalCovariance(assume_centered=True)
+    covariance.fit(centered_features)
+    return MahalanobisPPStats(
+        class_means=np.asarray(means, dtype=np.float64),
+        precision=np.asarray(covariance.precision_, dtype=np.float64),
+        class_labels=class_labels,
+    )
+
+
+def mahalanobis_pp_score(query_features: np.ndarray, stats: MahalanobisPPStats) -> np.ndarray:
+    """Mahalanobis++ score. Higher values are more ID-like."""
+
+    query = l2_normalize(np.asarray(query_features, dtype=np.float64))
+    distances = np.empty((query.shape[0], stats.class_means.shape[0]), dtype=np.float64)
+    for i, mean in enumerate(stats.class_means):
+        diff = query - mean
+        distances[:, i] = np.sum((diff @ stats.precision) * diff, axis=1)
+    return -distances.min(axis=1)
 
 
 def mah_min_distance_score(
