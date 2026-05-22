@@ -1,5 +1,5 @@
 # MAF: 特徴空間のMahalanobis幾何に基づく野生動物画像のUltra-Near-OoD検知
-
+# MAF: Mahalanobis Affinity Fusion for Ultra-Near-OoD Detection in Wildlife Images
 # 慶應義塾大学3年　表 紘太朗 (Keio University B3, Kotaro Omote)
 
 研究会では各自をログインネームで呼ぶ＆書く文化があります。悪しからずご了承ください。
@@ -8,7 +8,9 @@ Reproducible implementation for **Mahalanobis Affinity Fusion (MAF)**, a feature
 
 **Report PDF:** [MAF: 特徴空間のMahalanobis幾何に基づく野生動物画像のUltra-Near-OoD検知](docs/main.pdf)
 
+
 This repository is intentionally small. It keeps only the implementation needed to reproduce the paper experiments and removes notebooks, report build artifacts, server-specific wrapper scripts, and temporary ablation code.
+OoD = Out-of-Distribution（分布外検知）
 
 ## Method
 
