@@ -187,7 +187,7 @@ Additional backbone, ablation, covariance, and species-level figures are listed 
 src/maf01/
   maf.py          # MAF statistics, distances, components, fusion scores
   metrics.py      # AUROC, AUPR-IN, AUPR-OUT, FPR95, AUTC
-  baselines.py    # MSP, Entropy, Energy, MaxLogit, KNN, RMD, Mah-MinDist
+  baselines.py    # MSP, Entropy, Energy, MaxLogit, KNN, RMD, Mah-MinDist, Mahalanobis++
   io.py           # cached feature NPZ loading/saving
   data.py         # WILD_DATA image datasets and transforms
   features.py     # DINOv2 feature extraction and a Linear(d->K) logit head
